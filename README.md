@@ -28,6 +28,8 @@ irm https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/install
 
 装好后浏览器打开 <http://127.0.0.1:18799>。默认端口 18799，实际端口写在 `~/.openboss/port`（Windows 在 `%USERPROFILE%\.openboss\port`），EYE 插件启动时读这个文件。
 
+Center 默认监听所有网卡：同一局域网的设备可以直接用 `http://<本机IP>:18799` 打开；想只限本机，把 `~/.openboss/config.json` 里的 `bindHost` 设为 `127.0.0.1`（Windows 首次监听会弹防火墙授权，选择允许）。
+
 ## 运行机制
 
 安装完成后后端即常驻：登录自动启动，进程挂了自动重拉。
@@ -37,5 +39,6 @@ irm https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/install
 - **手动管理**：
   - `openboss service status | start | stop` — 查看、启动、暂停自启服务；`stop` 只是暂停，下次登录会自动恢复。
   - `openboss serve` — 前台运行；`openboss up` — 确保后端在跑（幂等）。
+- **局域网与反向代理**：默认监听 `0.0.0.0`，界面、API、WebSocket 共用同一个端口，反代整个端口即可（记得放行 WebSocket 的 `Upgrade`/`Connection` 头）。Center 没有内置登录，局域网内任何人都能操作——请只在可信网络使用，或由反代加一层认证；只限本机时把 `config.json` 的 `bindHost` 设为 `127.0.0.1`。
 - **升级**：检测到新版本时，侧边栏「系统设置」会出现「检测可更新」小标，进设置首页点「升级」即可（Center 自动下载并重启到新版本，页面自动刷新）；也可以在终端运行 `openboss upgrade`。
 - **开发**：在源码仓库用 `./alive.sh` 本地重建并运行（默认生产模式；`./alive.sh dev` 切换 Vite 热更新）。运行时会临时暂停已安装的自启服务，下次登录自动恢复。
