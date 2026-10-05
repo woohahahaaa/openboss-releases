@@ -55,7 +55,25 @@ try {
 
     if ($env:OPENBOSS_NO_SERVICE -ne "1") {
         Say "registering autostart task ..."
-        & $Exe service install
+        $InstallCode = 0
+        try {
+            & $Exe service install
+            $InstallCode = $LASTEXITCODE
+        } catch {
+            if ($LASTEXITCODE) { $InstallCode = $LASTEXITCODE } else { $InstallCode = 1 }
+        }
+        # 以任务计划里真实存在为准，而不是只看 service install 的返回值。
+        # 任务在、但这次没起来（State 不是 Running）也算成功：登录触发会拉起它。
+        $Task = Get-ScheduledTask -TaskName "OpenBoss" -ErrorAction SilentlyContinue
+        if (-not $Task) {
+            throw "autostart task 'OpenBoss' was NOT registered (service install exit $InstallCode)"
+        }
+        if ($Task.State -eq "Running") {
+            Say "autostart ready - backend starts automatically after logon"
+        } else {
+            Say "autostart registered - task is in place, starts at next logon"
+            Say "start it now with: $Exe service start"
+        }
     }
 
     Say ("done: openboss " + (& $Exe version))

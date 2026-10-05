@@ -92,9 +92,27 @@ fi
 
 if [ "${OPENBOSS_NO_SERVICE:-0}" != "1" ]; then
   say "registering autostart service ..."
-  if ! "$APP_DIR/openboss" service install; then
-    say "service install failed — run '$APP_DIR/openboss service install' manually"
-  fi
+  "$APP_DIR/openboss" service install || true
+  # 以退出码为准判断自启到底装上没有，别只看 install 的返回值：macOS 在无
+  # GUI 会话（如 SSH）里 bootstrap 会失败，但单元已经写好，下次登录 launchd
+  # 仍会自动加载——那是 4（已安装、当前暂停），仍算成功。
+  #   0 = 已安装且正在运行   4 = 已安装但当前暂停   3 = 未安装
+  svc_rc=0
+  "$APP_DIR/openboss" service status >/dev/null 2>&1 || svc_rc=$?
+  case "$svc_rc" in
+    0)
+      say "autostart ready — backend starts automatically after login"
+      ;;
+    4)
+      say "autostart registered — unit is in place, starts at next login"
+      say "start it now with: $APP_DIR/openboss service start"
+      ;;
+    *)
+      say "ERROR: autostart was NOT registered (service status exit $svc_rc)." >&2
+      say "       fix the error above, then run: $APP_DIR/openboss service install" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 say "done: openboss $("$APP_DIR/openboss" version)"

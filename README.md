@@ -35,6 +35,7 @@ Center 默认监听所有网卡：同一局域网的设备可以直接用 `http:
 安装完成后后端即常驻：登录自动启动，进程挂了自动重拉。
 
 - **登录自启**：macOS 注册 LaunchAgent（`RunAtLoad`），Windows 注册登录任务（任务计划程序）。开机登录后无需手动做任何事，后端自动运行。
+- **确认自启装好了**：终端运行 `openboss service status`。退出码 `0`=已安装且运行中、`4`=已安装但暂停（下次登录仍会自启）、`3`=未安装。curl / irm 安装脚本会用这个码校验，装不上会直接报错退出，不会静默略过。
 - **崩溃自动重启**：macOS 由 launchd 的 `KeepAlive` 拉起；Windows 由 `openboss up --supervise` 守护循环负责（退出 1 秒后重拉）。日志都在 `~/.openboss/log/center.log`。
 - **手动管理**：
   - `openboss service status | start | stop` — 查看、启动、暂停自启服务；`stop` 只是暂停，下次登录会自动恢复。
