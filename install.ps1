@@ -188,7 +188,17 @@ try {
                    "安全软件（如 360 主动防御）拦截了自启注册：请把 $Exe 加入信任区/白名单后重跑安装，" +
                    "或手动在启动文件夹放一个指向它的快捷方式。后端本次已启动，控制台可直接使用。")
         }
-        if ($Task -and $Task.State -eq "Running") {
+        # 任务跑的是 wscript 启动器，拉起后端后任务状态就回到 Ready，所以用
+        # 后端健康而不是任务状态来判断“这次起没起来”。
+        $Healthy = $false
+        try {
+            $PortFile = Join-Path $env:USERPROFILE ".openboss\port"
+            if (Test-Path $PortFile) {
+                $Port = (Get-Content -LiteralPath $PortFile -Raw).Trim()
+                $Healthy = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 -Uri ("http://127.0.0.1:" + $Port + "/api/state")).StatusCode -lt 500
+            }
+        } catch { }
+        if ($Healthy) {
             Say "autostart ready - backend starts automatically after logon"
         } elseif ($Task) {
             Say "autostart registered - task is in place, starts at next logon"
