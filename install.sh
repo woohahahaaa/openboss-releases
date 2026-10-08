@@ -5,7 +5,7 @@
 #
 # 安装脚本做这些事：下载最新发行版、校验 SHA256、装到固定目录并链接到
 # PATH、注册登录自启（launchd / systemd --user）；macOS 还会在桌面生成
-# OpenBoss.app 启动器（双击用 Chrome --app 模式打开控制台）。重复执行即为升级。
+# OpenBoss.app 启动器（双击用完整 Chrome 窗口打开控制台）。重复执行即为升级。
 #
 # 环境变量：
 #   OPENBOSS_HOME          安装根目录（默认 ~/.openboss）
@@ -117,9 +117,9 @@ if [ "${OPENBOSS_NO_SERVICE:-0}" != "1" ]; then
   esac
 fi
 
-# macOS：桌面生成一个启动器 .app，双击用 Chrome 的 --app 模式打开控制台
-# （独立窗口、无地址栏）。这不是真 PWA——真正的 PWA 安装只能由浏览器完成
-# （地址栏「安装」/菜单「安装 OpenBoss」），脚本无法代劳。
+# macOS：桌面生成一个启动器 .app，双击用完整 Chrome 窗口打开控制台。
+# 不用 --app 模式是因为那样没有地址栏，看不到 PWA 的「安装」按钮；装成 PWA
+# 之后程序坞里的图标才是 OpenBoss 自己的（安装只能由浏览器完成，脚本代劳不了）。
 if [ "$os" = darwin ] && [ "${OPENBOSS_NO_DESKTOP:-0}" != "1" ]; then
   say "creating desktop launcher ..."
   APP="$HOME/Desktop/OpenBoss.app"
@@ -148,7 +148,8 @@ PLIST
 
   cat > "$BUILD/Contents/MacOS/OpenBoss" <<'LAUNCHER'
 #!/bin/sh
-# OpenBoss 启动器：用 Chrome 的 --app 模式打开控制台（独立窗口，无地址栏）。
+# OpenBoss 启动器：用完整 Chrome 窗口打开控制台（有地址栏，方便点「安装」
+# 把控制台装成 PWA，装完程序坞图标才是 OpenBoss 自己的）。
 # 端口从 ~/.openboss/port 读取，读不到退回 18799。
 set -u
 
@@ -161,7 +162,7 @@ URL="http://127.0.0.1:$PORT"
 for app in "Google Chrome" "Google Chrome Canary" "Microsoft Edge" "Brave Browser" "Chromium"; do
   bin="/Applications/$app.app/Contents/MacOS/$app"
   if [ -x "$bin" ]; then
-    exec "$bin" --app="$URL"
+    exec "$bin" --new-window "$URL"
   fi
 done
 
