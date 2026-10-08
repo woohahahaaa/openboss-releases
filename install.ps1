@@ -69,48 +69,64 @@ try {
                 } catch { }
             }
             Remove-Item $ShellDst -Recurse -Force -ErrorAction SilentlyContinue
-            Copy-Item $ShellSrc $ShellDst -Recurse -Force
+            if (Test-Path $ShellDst) {
+                Say "WARN: could not clear $ShellDst (desktop app still running?); skipping the desktop app"
+            } else {
+                New-Item -ItemType Directory -Path $ShellDst -Force | Out-Null
+                # 拷目录内容而不是整个目录：目标已存在时 Copy-Item 会把源目录再
+                # 套一层（app\OpenBoss\OpenBoss\...），外壳就会因缺 dll 起不来。
+                Copy-Item (Join-Path $ShellSrc "*") $ShellDst -Recurse -Force
 
-            $Desktop = [Environment]::GetFolderPath("Desktop")
-            if (Test-Path $Desktop) {
-                $Link = Join-Path $Desktop "OpenBoss.lnk"
-                $Made = $false
-                try {
-                    $Ws = New-Object -ComObject WScript.Shell
-                    $Shortcut = $Ws.CreateShortcut($Link)
-                    $Shortcut.TargetPath = $ShellExe
-                    $Shortcut.WorkingDirectory = $ShellDst
-                    $Shortcut.IconLocation = "$ShellExe,0"
-                    $Shortcut.Description = "OpenBoss 控制台"
-                    $Shortcut.Save()
-                    $Made = $true
-                } catch { }
-                if (-not $Made) {
-                    # 受限会话/安全软件不让直接往桌面写 .lnk：先在安装目录生成，
-                    # 再交给资源管理器（Shell COM）复制过去。Shell COM 在个别
-                    # 环境下会卡死，放到独立进程里跑并限时 15 秒，卡了就放弃。
-                    try {
-                        $Staged = Join-Path $AppDir "OpenBoss.lnk"
-                        $Ws = New-Object -ComObject WScript.Shell
-                        $Shortcut = $Ws.CreateShortcut($Staged)
-                        $Shortcut.TargetPath = $ShellExe
-                        $Shortcut.WorkingDirectory = $ShellDst
-                        $Shortcut.IconLocation = "$ShellExe,0"
-                        $Shortcut.Description = "OpenBoss 控制台"
-                        $Shortcut.Save()
-                        $Helper = Join-Path $Work "copy-lnk.ps1"
-                        Set-Content -LiteralPath $Helper -Encoding ASCII -Value (
-                            '(New-Object -ComObject Shell.Application).NameSpace("' + $Desktop +
-                            '").CopyHere("' + $Staged + '", 20)')
-                        $Proc = Start-Process powershell -PassThru -WindowStyle Hidden -ArgumentList @(
-                            "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $Helper)
-                        if (-not $Proc.WaitForExit(15000)) { try { $Proc.Kill() } catch { } }
-                        Start-Sleep -Milliseconds 600
-                        $Made = Test-Path $Link
-                    } catch { }
+                $Missing = @()
+                foreach ($f in "OpenBoss.exe", "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll", "WebView2Loader.dll") {
+                    $p = Join-Path $ShellDst $f
+                    if (-not (Test-Path $p) -or (Get-Item $p).Length -le 0) { $Missing += $f }
                 }
-                if ($Made) { Say "desktop app: $Link" }
-                else { Say "WARN: could not create the desktop shortcut" }
+                if ($Missing.Count -gt 0) {
+                    Say ("WARN: desktop app files are incomplete (" + ($Missing -join ", ") + "); skipping the shortcut")
+                } else {
+                    $Desktop = [Environment]::GetFolderPath("Desktop")
+                    if (Test-Path $Desktop) {
+                        $Link = Join-Path $Desktop "OpenBoss.lnk"
+                        $Made = $false
+                        try {
+                            $Ws = New-Object -ComObject WScript.Shell
+                            $Shortcut = $Ws.CreateShortcut($Link)
+                            $Shortcut.TargetPath = $ShellExe
+                            $Shortcut.WorkingDirectory = $ShellDst
+                            $Shortcut.IconLocation = "$ShellExe,0"
+                            $Shortcut.Description = "OpenBoss 控制台"
+                            $Shortcut.Save()
+                            $Made = $true
+                        } catch { }
+                        if (-not $Made) {
+                            # 受限会话/安全软件不让直接往桌面写 .lnk：先在安装目录生成，
+                            # 再交给资源管理器（Shell COM）复制过去。Shell COM 在个别
+                            # 环境下会卡死，放到独立进程里跑并限时 15 秒，卡了就放弃。
+                            try {
+                                $Staged = Join-Path $AppDir "OpenBoss.lnk"
+                                $Ws = New-Object -ComObject WScript.Shell
+                                $Shortcut = $Ws.CreateShortcut($Staged)
+                                $Shortcut.TargetPath = $ShellExe
+                                $Shortcut.WorkingDirectory = $ShellDst
+                                $Shortcut.IconLocation = "$ShellExe,0"
+                                $Shortcut.Description = "OpenBoss 控制台"
+                                $Shortcut.Save()
+                                $Helper = Join-Path $Work "copy-lnk.ps1"
+                                Set-Content -LiteralPath $Helper -Encoding ASCII -Value (
+                                    '(New-Object -ComObject Shell.Application).NameSpace("' + $Desktop +
+                                    '").CopyHere("' + $Staged + '", 20)')
+                                $Proc = Start-Process powershell -PassThru -WindowStyle Hidden -ArgumentList @(
+                                    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $Helper)
+                                if (-not $Proc.WaitForExit(15000)) { try { $Proc.Kill() } catch { } }
+                                Start-Sleep -Milliseconds 600
+                                $Made = Test-Path $Link
+                            } catch { }
+                        }
+                        if ($Made) { Say "desktop app: $Link" }
+                        else { Say "WARN: could not create the desktop shortcut" }
+                    }
+                }
             }
         }
     }
