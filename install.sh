@@ -3,13 +3,15 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/install.sh | sh
 #
-# 安装脚本做四件事：下载最新发行版、校验 SHA256、装到固定目录并链接到
-# PATH、注册登录自启（launchd / systemd --user）。重复执行即为升级。
+# 安装脚本做这些事：下载最新发行版、校验 SHA256、装到固定目录并链接到
+# PATH、注册登录自启（launchd / systemd --user）；macOS 还会在桌面生成
+# OpenBoss.app 启动器（双击用 Chrome --app 模式打开控制台）。重复执行即为升级。
 #
 # 环境变量：
 #   OPENBOSS_HOME          安装根目录（默认 ~/.openboss）
 #   OPENBOSS_BIN_DIR       命令链接目录（默认 ~/.local/bin）
 #   OPENBOSS_NO_SERVICE=1  跳过自启服务注册
+#   OPENBOSS_NO_DESKTOP=1  macOS：跳过桌面启动器生成
 set -eu
 
 BASE="https://github.com/woohahahaaa/openboss-releases/releases/latest/download"
@@ -113,6 +115,84 @@ if [ "${OPENBOSS_NO_SERVICE:-0}" != "1" ]; then
       exit 1
       ;;
   esac
+fi
+
+# macOS：桌面生成一个启动器 .app，双击用 Chrome 的 --app 模式打开控制台
+# （独立窗口、无地址栏）。这不是真 PWA——真正的 PWA 安装只能由浏览器完成
+# （地址栏「安装」/菜单「安装 OpenBoss」），脚本无法代劳。
+if [ "$os" = darwin ] && [ "${OPENBOSS_NO_DESKTOP:-0}" != "1" ]; then
+  say "creating desktop launcher ..."
+  APP="$HOME/Desktop/OpenBoss.app"
+  BUILD="$WORK/OpenBoss.app"
+  mkdir -p "$BUILD/Contents/MacOS" "$BUILD/Contents/Resources"
+
+  cat > "$BUILD/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>OpenBoss</string>
+  <key>CFBundleDisplayName</key><string>OpenBoss</string>
+  <key>CFBundleIdentifier</key><string>dev.openboss.launcher</string>
+  <key>CFBundleVersion</key><string>1.0</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleExecutable</key><string>OpenBoss</string>
+  <key>CFBundleIconFile</key><string>icon</string>
+  <key>LSMinimumSystemVersion</key><string>10.13</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+</dict>
+</plist>
+PLIST
+
+  cat > "$BUILD/Contents/MacOS/OpenBoss" <<'LAUNCHER'
+#!/bin/sh
+# OpenBoss 启动器：用 Chrome 的 --app 模式打开控制台（独立窗口，无地址栏）。
+# 端口从 ~/.openboss/port 读取，读不到退回 18799。
+set -u
+
+PORT="$(cat "$HOME/.openboss/port" 2>/dev/null || true)"
+case "$PORT" in
+  ''|*[!0-9]*) PORT=18799 ;;
+esac
+URL="http://127.0.0.1:$PORT"
+
+for app in "Google Chrome" "Google Chrome Canary" "Microsoft Edge" "Brave Browser" "Chromium"; do
+  bin="/Applications/$app.app/Contents/MacOS/$app"
+  if [ -x "$bin" ]; then
+    exec "$bin" --app="$URL"
+  fi
+done
+
+# 没装 Chromium 系浏览器就交给默认浏览器打开
+exec open "$URL"
+LAUNCHER
+  chmod +x "$BUILD/Contents/MacOS/OpenBoss"
+
+  # 图标从本机后端取（web 资源编译在二进制里，本地服务是唯一现成的来源；
+  # 服务没跑就退化成默认图标，不算失败）。
+  rm -f "$BUILD/Contents/Resources/icon.icns"
+  PORT_NOW="$(cat "$HOME/.openboss/port" 2>/dev/null || true)"
+  case "$PORT_NOW" in ''|*[!0-9]*) PORT_NOW=18799 ;; esac
+  if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1 \
+     && curl -fsSL -o "$WORK/icon-512.png" "http://127.0.0.1:$PORT_NOW/icon-512.png"; then
+    mkdir -p "$WORK/icon.iconset"
+    for s in 16 32 128 256 512; do
+      sips -z "$s" "$s" "$WORK/icon-512.png" --out "$WORK/icon.iconset/icon_${s}x${s}.png" >/dev/null 2>&1 || true
+      sips -z "$((s * 2))" "$((s * 2))" "$WORK/icon-512.png" --out "$WORK/icon.iconset/icon_${s}x${s}@2x.png" >/dev/null 2>&1 || true
+    done
+    iconutil -c icns "$WORK/icon.iconset" -o "$BUILD/Contents/Resources/icon.icns" >/dev/null 2>&1 || true
+  fi
+
+  rm -rf "$APP"
+  mv "$BUILD" "$APP"
+  # 让 Finder / LaunchServices 立刻认识这个包（失败无妨，稍后自会刷新）。
+  lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  if [ -x "$lsregister" ]; then
+    "$lsregister" -f "$APP" >/dev/null 2>&1 || true
+  fi
+  say "desktop launcher: $APP (double-click to open the console)"
 fi
 
 say "done: openboss $("$APP_DIR/openboss" version)"
