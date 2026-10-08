@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/
 irm https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/install.ps1 | iex
 ```
 
-安装脚本会下载最新版本、放到固定目录、加进 PATH，并注册登录自启；macOS 还会把发行包自带的原生小外壳 `OpenBoss.app` 装到桌面——双击直接打开控制台，窗口没有浏览器工具栏，程序坞/切换器里就是 OpenBoss 图标（`OPENBOSS_NO_DESKTOP=1` 可跳过；老安装包不带外壳时退回 Chrome 启动器）。想手动安装，可从 [Releases](https://github.com/woohahahaaa/openboss-releases/releases) 下载对应平台的压缩包，解压后保持 `openboss`（Windows 为 `openboss.exe`）与 `EYE/` 同目录即可。
+安装脚本会下载最新版本、放到固定目录、加进 PATH，并注册登录自启；macOS 还会把发行包自带的原生小外壳 `OpenBoss.app` 装到桌面，Windows 会在桌面放 `OpenBoss.lnk`——双击直接打开控制台，窗口没有浏览器工具栏，程序坞 / 任务栏里就是 OpenBoss 图标（`OPENBOSS_NO_DESKTOP=1` 可跳过；老安装包不带外壳时 macOS 退回 Chrome 启动器）。Windows 上个别安全软件（如 360 主动防御）会拦截自启注册，此时安装脚本会明确报错并给出处理提示（把 `openboss.exe` 加入信任区后重跑）。想手动安装，可从 [Releases](https://github.com/woohahahaaa/openboss-releases/releases) 下载对应平台的压缩包，解压后保持 `openboss`（Windows 为 `openboss.exe`）与 `EYE/` 同目录即可。
 
 装好后浏览器打开 <http://127.0.0.1:18799>。默认端口 18799，实际端口写在 `~/.openboss/port`（Windows 在 `%USERPROFILE%\.openboss\port`），EYE 插件启动时读这个文件。
 
