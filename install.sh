@@ -4,8 +4,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/install.sh | sh
 #
 # 安装脚本做这些事：下载最新发行版、校验 SHA256、装到固定目录并链接到
-# PATH、注册登录自启（launchd / systemd --user）；macOS 还会在桌面生成
-# OpenBoss.app 启动器（双击用完整 Chrome 窗口打开控制台）。重复执行即为升级。
+# PATH、注册登录自启（launchd / systemd --user）；macOS 还会把发行包里的
+# 原生外壳 OpenBoss.app 装到桌面（老包没有时退回 Chrome 启动器）。重复执行即为升级。
 #
 # 环境变量：
 #   OPENBOSS_HOME          安装根目录（默认 ~/.openboss）
@@ -117,16 +117,24 @@ if [ "${OPENBOSS_NO_SERVICE:-0}" != "1" ]; then
   esac
 fi
 
-# macOS：桌面生成一个启动器 .app，双击用完整 Chrome 窗口打开控制台。
-# 不用 --app 模式是因为那样没有地址栏，看不到 PWA 的「安装」按钮；装成 PWA
-# 之后程序坞里的图标才是 OpenBoss 自己的（安装只能由浏览器完成，脚本代劳不了）。
+# macOS：桌面生成 OpenBoss.app。发行包里带原生外壳（macapp/，基于系统
+# WebKit 的小浏览器，窗口无工具栏、程序坞就是 OpenBoss 图标）就直接装它；
+# 老发行包没有就退回 Chrome 启动器（完整窗口，方便点地址栏的「安装」装成 PWA）。
 if [ "$os" = darwin ] && [ "${OPENBOSS_NO_DESKTOP:-0}" != "1" ]; then
-  say "creating desktop launcher ..."
   APP="$HOME/Desktop/OpenBoss.app"
-  BUILD="$WORK/OpenBoss.app"
-  mkdir -p "$BUILD/Contents/MacOS" "$BUILD/Contents/Resources"
+  if [ -d "$WORK/extract/OpenBoss.app" ]; then
+    say "installing desktop app ..."
+    rm -rf "$APP"
+    cp -R "$WORK/extract/OpenBoss.app" "$APP"
+    # 浏览器/中转下载可能带隔离属性：清掉并重签一次（失败无妨）。
+    xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+    codesign --force -s - "$APP" >/dev/null 2>&1 || true
+  else
+    say "creating desktop launcher ..."
+    BUILD="$WORK/OpenBoss.app"
+    mkdir -p "$BUILD/Contents/MacOS" "$BUILD/Contents/Resources"
 
-  cat > "$BUILD/Contents/Info.plist" <<'PLIST'
+    cat > "$BUILD/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -146,7 +154,7 @@ if [ "$os" = darwin ] && [ "${OPENBOSS_NO_DESKTOP:-0}" != "1" ]; then
 </plist>
 PLIST
 
-  cat > "$BUILD/Contents/MacOS/OpenBoss" <<'LAUNCHER'
+    cat > "$BUILD/Contents/MacOS/OpenBoss" <<'LAUNCHER'
 #!/bin/sh
 # OpenBoss 启动器：用完整 Chrome 窗口打开控制台（有地址栏，方便点「安装」
 # 把控制台装成 PWA，装完程序坞图标才是 OpenBoss 自己的）。
@@ -169,31 +177,33 @@ done
 # 没装 Chromium 系浏览器就交给默认浏览器打开
 exec open "$URL"
 LAUNCHER
-  chmod +x "$BUILD/Contents/MacOS/OpenBoss"
+    chmod +x "$BUILD/Contents/MacOS/OpenBoss"
 
-  # 图标从本机后端取（web 资源编译在二进制里，本地服务是唯一现成的来源；
-  # 服务没跑就退化成默认图标，不算失败）。
-  rm -f "$BUILD/Contents/Resources/icon.icns"
-  PORT_NOW="$(cat "$HOME/.openboss/port" 2>/dev/null || true)"
-  case "$PORT_NOW" in ''|*[!0-9]*) PORT_NOW=18799 ;; esac
-  if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1 \
-     && curl -fsSL -o "$WORK/icon-512.png" "http://127.0.0.1:$PORT_NOW/icon-512.png"; then
-    mkdir -p "$WORK/icon.iconset"
-    for s in 16 32 128 256 512; do
-      sips -z "$s" "$s" "$WORK/icon-512.png" --out "$WORK/icon.iconset/icon_${s}x${s}.png" >/dev/null 2>&1 || true
-      sips -z "$((s * 2))" "$((s * 2))" "$WORK/icon-512.png" --out "$WORK/icon.iconset/icon_${s}x${s}@2x.png" >/dev/null 2>&1 || true
-    done
-    iconutil -c icns "$WORK/icon.iconset" -o "$BUILD/Contents/Resources/icon.icns" >/dev/null 2>&1 || true
+    # 图标从本机后端取（web 资源编译在二进制里，本地服务是唯一现成的来源；
+    # 服务没跑就退化成默认图标，不算失败）。
+    rm -f "$BUILD/Contents/Resources/icon.icns"
+    PORT_NOW="$(cat "$HOME/.openboss/port" 2>/dev/null || true)"
+    case "$PORT_NOW" in ''|*[!0-9]*) PORT_NOW=18799 ;; esac
+    if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1 \
+       && curl -fsSL -o "$WORK/icon-512.png" "http://127.0.0.1:$PORT_NOW/icon-512.png"; then
+      mkdir -p "$WORK/icon.iconset"
+      for s in 16 32 128 256 512; do
+        sips -z "$s" "$s" "$WORK/icon-512.png" --out "$WORK/icon.iconset/icon_${s}x${s}.png" >/dev/null 2>&1 || true
+        sips -z "$((s * 2))" "$((s * 2))" "$WORK/icon-512.png" --out "$WORK/icon.iconset/icon_${s}x${s}@2x.png" >/dev/null 2>&1 || true
+      done
+      iconutil -c icns "$WORK/icon.iconset" -o "$BUILD/Contents/Resources/icon.icns" >/dev/null 2>&1 || true
+    fi
+
+    rm -rf "$APP"
+    mv "$BUILD" "$APP"
   fi
 
-  rm -rf "$APP"
-  mv "$BUILD" "$APP"
   # 让 Finder / LaunchServices 立刻认识这个包（失败无妨，稍后自会刷新）。
   lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
   if [ -x "$lsregister" ]; then
     "$lsregister" -f "$APP" >/dev/null 2>&1 || true
   fi
-  say "desktop launcher: $APP (double-click to open the console)"
+  say "desktop app: $APP"
 fi
 
 say "done: openboss $("$APP_DIR/openboss" version)"
