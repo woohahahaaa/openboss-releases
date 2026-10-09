@@ -8,6 +8,7 @@
 #
 # 环境变量：
 #   $env:OPENBOSS_HOME            安装根目录（默认 %LOCALAPPDATA%\OpenBoss）
+#   $env:OPENBOSS_PORT            首选服务端口（写入 config.json；缺省自动分配）
 #   $env:OPENBOSS_NO_SERVICE=1    跳过自启任务注册
 #   $env:OPENBOSS_NO_DESKTOP=1    跳过桌面快捷方式
 $ErrorActionPreference = "Stop"
@@ -53,6 +54,13 @@ try {
     if ($UserPath -notlike "*$AppDir*") {
         [Environment]::SetEnvironmentVariable("Path", ($AppDir + ";" + $UserPath), "User")
         Say "added $AppDir to the user PATH (takes effect in new terminals)"
+    }
+
+    # OPENBOSS_PORT：打包/创建时用参数固定首选端口；写进 config.json 后，
+    # 任务计划自启的 serve 也会一直用它。
+    if ($env:OPENBOSS_PORT) {
+        Say "setting preferred port $env:OPENBOSS_PORT ..."
+        & $Exe port "$env:OPENBOSS_PORT"
     }
 
     if ($env:OPENBOSS_NO_DESKTOP -ne "1") {

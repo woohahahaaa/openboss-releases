@@ -10,6 +10,7 @@
 # 环境变量：
 #   OPENBOSS_HOME          安装根目录（默认 ~/.openboss）
 #   OPENBOSS_BIN_DIR       命令链接目录（默认 ~/.local/bin）
+#   OPENBOSS_PORT          首选服务端口（写入 config.json；缺省自动分配）
 #   OPENBOSS_NO_SERVICE=1  跳过自启服务注册
 #   OPENBOSS_NO_DESKTOP=1  macOS：跳过桌面启动器生成
 set -eu
@@ -78,6 +79,13 @@ fi
 mkdir -p "$BIN_DIR"
 ln -sf "$APP_DIR/openboss" "$BIN_DIR/openboss"
 say "linked $BIN_DIR/openboss"
+
+# OPENBOSS_PORT：打包/创建时用参数固定首选端口；写进 config.json 后，
+# launchd/systemd 自启的 serve 也会一直用它。
+if [ -n "${OPENBOSS_PORT:-}" ]; then
+  say "setting preferred port $OPENBOSS_PORT ..."
+  "$APP_DIR/openboss" port "$OPENBOSS_PORT"
+fi
 
 # PATH: 只在用户的第一个 shell 配置里加一次（带标记，不重复写）。
 if ! printf '%s' ":${PATH:-}:" | grep -q ":$BIN_DIR:"; then
