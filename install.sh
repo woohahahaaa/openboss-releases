@@ -4,15 +4,17 @@
 #   curl -fsSL https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/install.sh | sh
 #
 # 安装脚本做这些事：下载最新发行版、校验 SHA256、装到固定目录并链接到
-# PATH、注册登录自启（launchd / systemd --user）；macOS 还会把发行包里的
-# 原生外壳 OpenBoss.app 装到桌面（老包没有时退回 Chrome 启动器）。重复执行即为升级。
+# PATH、注册登录自启（launchd / systemd --user）；macOS 还会把
+# 发行包里的原生外壳 OpenBoss.app 装到桌面（老包没有时退回 Chrome 启动器）。
+# 重复执行即为升级。
 #
 # 环境变量：
 #   OPENBOSS_HOME          安装根目录（默认 ~/.openboss）
 #   OPENBOSS_BIN_DIR       命令链接目录（默认 ~/.local/bin）
-#   OPENBOSS_PORT          首选服务端口（写入 config.json；缺省自动分配）
 #   OPENBOSS_NO_SERVICE=1  跳过自启服务注册
 #   OPENBOSS_NO_DESKTOP=1  macOS：跳过桌面启动器生成
+#
+# 本文件由 woohkit 在 release 时按项目配置渲染生成，勿手改。
 set -eu
 
 BASE="https://github.com/woohahahaaa/openboss-releases/releases/latest/download"
@@ -80,8 +82,8 @@ mkdir -p "$BIN_DIR"
 ln -sf "$APP_DIR/openboss" "$BIN_DIR/openboss"
 say "linked $BIN_DIR/openboss"
 
-# OPENBOSS_PORT：打包/创建时用参数固定首选端口；写进 config.json 后，
-# launchd/systemd 自启的 serve 也会一直用它。
+# OPENBOSS_PORT：打包/创建时用参数固定首选端口；写进配置后，launchd/systemd
+# 自启的 serve 也会一直用它。
 if [ -n "${OPENBOSS_PORT:-}" ]; then
   say "setting preferred port $OPENBOSS_PORT ..."
   "$APP_DIR/openboss" port "$OPENBOSS_PORT"
@@ -125,9 +127,9 @@ if [ "${OPENBOSS_NO_SERVICE:-0}" != "1" ]; then
   esac
 fi
 
-# macOS：桌面生成 OpenBoss.app。发行包里带原生外壳（macapp/，基于系统
-# WebKit 的小浏览器，窗口无工具栏、程序坞就是 OpenBoss 图标）就直接装它；
-# 老发行包没有就退回 Chrome 启动器（完整窗口，方便点地址栏的「安装」装成 PWA）。
+# macOS：桌面生成 OpenBoss.app。发行包里带原生外壳（基于系统 WebKit 的
+# 小浏览器，窗口无工具栏、程序坞就是 OpenBoss 图标）就直接装它；老发行
+# 包没有就退回 Chrome 启动器（完整窗口，方便点地址栏的「安装」装成 PWA）。
 if [ "$os" = darwin ] && [ "${OPENBOSS_NO_DESKTOP:-0}" != "1" ]; then
   APP="$HOME/Desktop/OpenBoss.app"
   if [ -d "$WORK/extract/OpenBoss.app" ]; then
@@ -187,8 +189,8 @@ exec open "$URL"
 LAUNCHER
     chmod +x "$BUILD/Contents/MacOS/OpenBoss"
 
-    # 图标从本机后端取（web 资源编译在二进制里，本地服务是唯一现成的来源；
-    # 服务没跑就退化成默认图标，不算失败）。
+    # 图标从本机后端取（本地服务是唯一现成的来源；服务没跑就退化成默认图标，
+    # 不算失败）。
     rm -f "$BUILD/Contents/Resources/icon.icns"
     PORT_NOW="$(cat "$HOME/.openboss/port" 2>/dev/null || true)"
     case "$PORT_NOW" in ''|*[!0-9]*) PORT_NOW=18799 ;; esac
@@ -215,4 +217,4 @@ LAUNCHER
 fi
 
 say "done: openboss $("$APP_DIR/openboss" version)"
-say "web console: http://127.0.0.1:18799"
+say "web console: http://127.0.0.1:$(cat "${OPENBOSS_HOME:-$HOME/.openboss}/port" 2>/dev/null || echo 18799)"

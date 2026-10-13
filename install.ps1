@@ -3,14 +3,16 @@
 #   irm https://raw.githubusercontent.com/woohahahaaa/openboss-releases/main/install.ps1 | iex
 #
 # 安装脚本做这些事：下载最新发行版、校验 SHA256、装到固定目录并加入用户
-# PATH、注册登录自启（任务计划程序）、在桌面放 OpenBoss 快捷方式（发行包里
-# 带 WinForms + WebView2 外壳时）。重复执行即为升级。
+# PATH、注册登录自启（任务计划程序，被安全软件拦截时退回启动文件夹）、在
+# 桌面放 OpenBoss 快捷方式（发行包里带 WinForms + WebView2 外壳时）。
+# 重复执行即为升级。
 #
 # 环境变量：
 #   $env:OPENBOSS_HOME            安装根目录（默认 %LOCALAPPDATA%\OpenBoss）
-#   $env:OPENBOSS_PORT            首选服务端口（写入 config.json；缺省自动分配）
-#   $env:OPENBOSS_NO_SERVICE=1    跳过自启任务注册
 #   $env:OPENBOSS_NO_DESKTOP=1    跳过桌面快捷方式
+#   $env:OPENBOSS_NO_SERVICE=1    跳过自启任务注册
+#
+# 本文件由 woohkit 在 release 时按项目配置渲染生成，勿手改。
 $ErrorActionPreference = "Stop"
 
 $Base = "https://github.com/woohahahaaa/openboss-releases/releases/latest/download"
@@ -43,11 +45,11 @@ try {
     Expand-Archive -Path (Join-Path $Work $Asset) -DestinationPath $Work -Force
     New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
     Copy-Item (Join-Path $Work "openboss.exe") $Exe -Force
-    $EyeSrc = Join-Path $Work "EYE"
-    if (Test-Path $EyeSrc) {
-        $EyeDst = Join-Path $AppDir "EYE"
-        Remove-Item $EyeDst -Recurse -Force -ErrorAction SilentlyContinue
-        Copy-Item $EyeSrc $EyeDst -Recurse -Force
+    $ExtraSrc = Join-Path $Work "EYE"
+    if (Test-Path $ExtraSrc) {
+        $ExtraDst = Join-Path $AppDir "EYE"
+        Remove-Item $ExtraDst -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item $ExtraSrc $ExtraDst -Recurse -Force
     }
 
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -56,8 +58,8 @@ try {
         Say "added $AppDir to the user PATH (takes effect in new terminals)"
     }
 
-    # OPENBOSS_PORT：打包/创建时用参数固定首选端口；写进 config.json 后，
-    # 任务计划自启的 serve 也会一直用它。
+    # OPENBOSS_PORT：打包/创建时用参数固定首选端口；写进配置后，任务计划
+    # 自启的 serve 也会一直用它。
     if ($env:OPENBOSS_PORT) {
         Say "setting preferred port $env:OPENBOSS_PORT ..."
         & $Exe port "$env:OPENBOSS_PORT"
@@ -197,7 +199,7 @@ try {
                    "或手动在启动文件夹放一个指向它的快捷方式。后端本次已启动，控制台可直接使用。")
         }
         # 任务跑的是 wscript 启动器，拉起后端后任务状态就回到 Ready，所以用
-        # 后端健康而不是任务状态来判断“这次起没起来”。
+        # 后端健康而不是任务状态来判断「这次起没起来」。
         $Healthy = $false
         try {
             $PortFile = Join-Path $env:USERPROFILE ".openboss\port"
@@ -218,7 +220,10 @@ try {
     }
 
     Say ("done: openboss " + (& $Exe version))
-    Say "web console: http://127.0.0.1:18799"
+    $Port = "18799"
+    $PortFile = Join-Path $Root "port"
+    if (Test-Path $PortFile) { $Port = (Get-Content -LiteralPath $PortFile -Raw).Trim() }
+    Say "web console: http://127.0.0.1:$Port"
 } finally {
     Remove-Item $Work -Recurse -Force -ErrorAction SilentlyContinue
 }
